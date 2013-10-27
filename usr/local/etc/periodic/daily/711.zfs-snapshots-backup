@@ -1,0 +1,245 @@
+#!/bin/sh
+#
+# Copyright (c) 2013  1&1 Internet AG
+# All rights reserved.
+# Written by          Joerg Pernfuss <joerg.pernfuss@1und1.de>
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+# OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+# HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+# OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+# SUCH DAMAGE.
+#
+# If there is a global system configuration file, suck it in.
+#
+if [ -r /etc/defaults/periodic.conf ]
+then
+  . /etc/defaults/periodic.conf
+  source_periodic_confs
+fi
+
+zfs=`which zfs`
+expr=`which expr`
+grep=`which grep`
+awk=`which awk`
+head=`which head`
+date=`which date`
+echo=`which echo`
+sed=`which sed`
+
+_date_today="$(${date:?} +%Y%m%d)"
+_date_yesterday="$(${date:?} -v-1d +%Y%m%d)"
+_namespace=${daily_zfs_snapshots_user_namespace}
+
+zfs_backup_create_incr () {
+  local _snap_fr="${1}"
+  local _snap_to="${2}"
+  local _type="${3}"
+  local _dir="${daily_zfs_snapshots_backup_storage_dir}"
+  local _dataset="${_snap_fr%%@*}"
+  local _filename="$(${echo:?} ${_dataset} | ${sed:?} -e 's|/|_|g')"
+  local _from_date="${_snap_fr##*:}"
+  local _to_date="${_snap_to##*:}"
+  local _flags="${daily_zfs_snapshots_backup_send_flags}"
+  _filename="${_filename}_${_from_date}-${_to_date}_${_type}"
+  _backupfile="${_filename}"
+  ${zfs:?} send "${_flags}" -i "${_snap_fr}" "${_snap_to}" > "${_dir}"/"${_filename}"
+}
+
+zfs_backup_create_full () {
+  local _snap="${1}"
+  local _dataset="${_snap%%@*}"
+  local _dir="${daily_zfs_snapshots_backup_storage_dir}"
+  local _filename="$(${echo:?} ${_dataset} | ${sed:?} -e 's|/|_|g')"
+  local _from_date="${_snap##*:}"
+  local _flags="${daily_zfs_snapshots_backup_send_flags}"
+  # filename with double date field preserves shell ordering
+  _filename="${_filename}_${_from_date}-${_from_date}_FULL"
+  _backupfile="${_filename}"
+  ${zfs:?} send "${_flags}" "${_snap}" > "${_dir}"/"${_filename}"
+}
+
+rc=0
+case "${daily_zfs_snapshots_backup_enable}" in
+    [Yy][Ee][Ss])
+  echo
+  echo "Creating backups from ZFS snapshots:"
+  _snapshots=$(${zfs:?} list -H -t snapshot \
+                        -o name,${_namespace}:date \
+                        -S ${_namespace}:date |\
+                        ${grep:?} ${_date_today}$ |\
+                        ${awk:?} '{ print $1 }')
+
+  for _snapshot in ${_snapshots}
+  do
+    _done="no"
+    _backupfile=""
+    _dataset=${_snapshot%%@*}
+    # was today a monthly snapshot?
+    _monthly="$(${zfs:?} list -H -o ${_namespace}:monthly ${_snapshot})"
+    if [ ${_monthly} = "yes" ]
+    then
+      # yes, today was a monthly. dump a full stream
+      zfs_backup_create_full "${_snapshot}"
+      _done="yes"
+    fi
+
+    # was today a weekly snapshot?
+    _weekly="$(${zfs:?} list -H -o ${_namespace}:weekly ${_snapshot})"
+    if [ ${_weekly} = "yes" ] &&
+       [ ${_done} = "no" ]
+    then
+      # find name of last monthly snapshot
+      _monthly="$(${zfs:?} list -H -t snapshot \
+                           -o name,${_namespace}:monthly \
+                           -S ${_namespace}:date |\
+                           ${grep:?} ^${_dataset} |\
+                           ${grep:?} "yes"$ |\
+                           ${head:?} -n 1 |\
+                           ${awk:?} '{ print $1 }')"
+      if [ ${#_monthly} -ne 0 ]
+      then
+        # we found a monthly to diff' against
+        zfs_backup_create_incr "${_monthly}" "${_snapshot}" "DIFF"
+        _done="yes"
+      fi
+      # today we created a weekly, but we have no monthly to diff
+      # against, so we create a full dump of today
+      if [ ${_done} = "no" ]
+      then
+        zfs_backup_create_full "${_snapshot}"
+        _done="yes"
+      fi
+    fi
+    # was today a daily snapshot?
+    _daily="$(${zfs:?} list -H -o ${_namespace}:daily ${_snapshot})"
+    if [ ${_daily} = "yes" ] &&
+       [ ${_done} = "no" ]
+    then
+      case "${daily_zfs_snapshots_backup_daily_style}" in
+          differential)
+        # do we have a weekly or monthly to create a differential stream with?
+        _delta="$(${zfs:?} list -H -t snapshot \
+                           -o name,${_namespace}:monthly,${_namespace}:weekly \
+                           -S ${_namespace}:date |\
+                           ${grep:?} ^${_dataset} |\
+                           ${awk:?} '{ if ($2 == "yes") print $1; if ($3 == "yes") print $1 }' |\
+                           ${head:?} -n 1 |\
+                           ${awk:?} '{ print $1 }')"
+        if [ ${#_delta} -ne 0 ]
+        then
+          # create diff between today and last weekly/monthly
+          zfs_backup_create_incr "${_delta}" "${_snapshot}" "DIFF"
+          _done="yes"
+        fi
+
+        if [ ${_done} = "no" ]
+        then
+          # if we only have daily snapshots, we fallback to incremental since
+          # we can't make up a sensible anchor for the differential stream
+          _yesterday="$(${zfs:?} list -H -t snapshot \
+                                 -o name,${_namespace}:date \
+                                 -S ${_namespace}:date |\
+                                 ${grep:?} ${_date_yesterday}$ |\
+                                 ${grep:?} ^${_dataset} |\
+                                 ${head:?} -n 1 |\
+                                 ${awk:?} '{ print $1 }')"
+          if [ ${#_yesterday} -ne 0 ]
+          then
+            # we have a daily from yesterday
+            zfs_backup_create_incr "${_yesterday}" "${_snapshot}" "INCR"
+            _done="yes"
+          else
+            # no monthly, no weekly at all and no daily from yesterday - first
+            # day running the script. make initial full stream dump
+            zfs_backup_create_full "${_snapshot}"
+            _done="yes"
+          fi
+        fi
+        ;;
+        # CASE END differential
+          incremental)
+        # Incremental mode, dailies are always generated against
+        # the day before, regardless of what that was
+        _yesterday="$(${zfs:?} list -H -t snapshot \
+                               -o name,${_namespace}:date \
+                               -S ${_namespace}:date |\
+                               ${grep:?} ${_date_yesterday}$ |\
+                               ${grep:?} ^${_dataset} |\
+                               ${head:?} -n 1 |\
+                               ${awk:?} '{ print $1 }')"
+        if [ ${#_yesterday} -ne 0 ]
+        then
+          zfs_backup_create_incr "${_yesterday}" "${_snapshot}" "INCR"
+          _done="yes"
+        else
+          # we have a daily from today, but nothing from yesterday
+          # likely the script is running for the first time. Create initial
+          # full backup
+          zfs_backup_create_full "${_snapshot}"
+          _done="yes"
+        fi
+        ;;
+        # CASE END incremental
+          *)
+        ;;
+      esac
+    fi
+    # if we created a snapshot stream file, we submit it to postprocessing
+    if [ "${_done}" = "yes" ]
+    then
+      # Checks:
+      # - script variable is set
+      # - script exists and is a file (needed as -x is true for directories)
+      # - script exists and is executable
+      # - target snapshot stream data exists and is a file
+      if  [ -n "${daily_zfs_snapshots_backup_postprocessing}" ] &&
+          [ -f "${daily_zfs_snapshots_backup_postprocessing}" ] &&
+          [ -x "${daily_zfs_snapshots_backup_postprocessing}" ] &&
+          [ -f "${daily_zfs_snapshots_backup_storage_dir}/${_backupfile}" ]
+      then
+        _command="${daily_zfs_snapshots_backup_postprocessing}"
+        _filepath="${daily_zfs_snapshots_backup_storage_dir}/${_backupfile}"
+        ${_command} ${_filepath}
+        if [ $? -gt ${rc} ]
+        then
+          echo "Error during postprocessing of file: ${_filepath}"
+          rc=$?
+        fi
+      else
+        echo "Backupstream for ${_snapshot} claims to have been generated,"\
+             "but postprocessing assertions failed."
+        echo "Postprocessing file: ${_filepath:-"not specified"}"
+        if [ ${rc} -eq 0 ]
+        then
+          rc=1
+        fi
+      fi
+    else
+      echo "Backup stream for ${_snapshot} was not generated."
+      if [ ${rc} -eq 0 ]
+      then
+        rc=1
+      fi
+    fi
+  done
+  ;;
+    *)
+  ;;
+esac
+exit $rc

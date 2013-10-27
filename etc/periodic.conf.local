@@ -1,0 +1,24 @@
+#!/bin/sh
+# Configuration for local extensions of periodic(8)
+
+# 710.zfs-snapshots
+daily_zfs_snapshots_enable="YES"
+daily_zfs_snapshots_create_weekly="YES"
+daily_zfs_snapshots_create_monthly="YES"
+daily_zfs_snapshots_datasets_ignore="pool/backup"
+daily_zfs_snapshots_user_namespace="com.1and1.periodic"
+
+# 711.zfs-snapshots-backup
+daily_zfs_snapshots_backup_enable="YES"
+daily_zfs_snapshots_backup_daily_style="differential"
+daily_zfs_snapshots_backup_storage_dir="/backup"
+daily_zfs_snapshots_backup_send_flags="-Dp"
+daily_zfs_snapshots_backup_postprocessing="/usr/local/sbin/zfs-snapshots-processing.sh"
+
+# 712.zfs-snapshots-cleanup
+daily_zfs_snapshots_cleanup_enable="YES"
+daily_zfs_snapshots_cleanup_viability="10"
+daily_zfs_snapshots_cleanup_clear_snapshots="YES"
+daily_zfs_snapshots_cleanup_clear_storage="YES"
+daily_zfs_snapshots_cleanup_script_snapshots="/usr/local/sbin/zfs-snapshots-clean.pl"
+daily_zfs_snapshots_cleanup_script_storage="/usr/local/sbin/zfs-snapshots-tidy.pl"

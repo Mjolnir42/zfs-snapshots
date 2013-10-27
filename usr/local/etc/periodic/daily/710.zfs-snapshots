@@ -1,0 +1,133 @@
+#!/bin/sh
+#
+# Copyright (c) 2013  1&1 Internet AG
+# All rights reserved.
+# Written by          Joerg Pernfuss <joerg.pernfuss@1und1.de>
+#
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions
+# are met:
+# 1. Redistributions of source code must retain the above copyright
+#    notice, this list of conditions and the following disclaimer.
+# 2. Redistributions in binary form must reproduce the above copyright
+#    notice, this list of conditions and the following disclaimer in the
+#    documentation and/or other materials provided with the distribution.
+#
+# THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+# ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+# IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+# ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+# FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+# DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+# OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+# HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+# LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+# OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+# SUCH DAMAGE.
+#
+# If there is a global system configuration file, suck it in.
+#
+if [ -r /etc/defaults/periodic.conf ]
+then
+  . /etc/defaults/periodic.conf
+  source_periodic_confs
+fi
+
+zfs=`which zfs`
+expr=`which expr`
+date=`which date`
+
+_daily_zfs_snapshots_date="$(${date:?} +%Y%m%d)"
+_daily_zfs_snapshots_weekday="$(${date:?} +%u)"
+_daily_zfs_snapshots_monthday="$(${date:?} +%e)"
+
+_daily_zfs_snapshots_create_daily () {
+  local _date="${_daily_zfs_snapshots_date}"
+  local _snapshot="${1}@Periodic:Daily:${_date}"
+  local _namespace="${daily_zfs_snapshots_user_namespace}"
+  ${zfs:?} snapshot \
+           -o "${_namespace}":daily=yes \
+           -o "${_namespace}":date="${_date}" \
+           "${_snapshot}"
+}
+
+_daily_zfs_snapshots_create_weekly () {
+  local _date="${_daily_zfs_snapshots_date}"
+  local _snapshot="${1}@Periodic:Weekly:${_date}"
+  local _namespace="${daily_zfs_snapshots_user_namespace}"
+  ${zfs:?} snapshot \
+           -o "${_namespace}":weekly=yes \
+           -o "${_namespace}":date="${_date}" \
+           "${_snapshot}"
+}
+
+_daily_zfs_snapshots_create_monthly () {
+  local _date="${_daily_zfs_snapshots_date}"
+  local _snapshot="${1}@Periodic:Monthly:${_date}"
+  local _namespace="${daily_zfs_snapshots_user_namespace}"
+  ${zfs:?} snapshot \
+           -o "${_namespace}":monthly=yes \
+           -o "${_namespace}":date="${_date}" \
+           "${_snapshot}"
+}
+
+rc=0
+case "${daily_zfs_snapshots_enable}" in
+    [Yy][Ee][Ss])
+  echo
+  echo "Creating snapshots for mounted ZFS datasets:"
+  _ignorelist="${daily_zfs_snapshots_datasets_ignore}"
+
+  _datasets="$( ${zfs:?} list -t filesystem -o name,mountpoint -H |\
+                         grep -v none$ |\
+                         awk '{ print $1 }')"
+  for dataset in ${_datasets}
+  do
+    _daily_zfs_snapshots_done="no"
+    # Skip datasets in or below ignore list
+    if ! ${expr} "${_ignorelist}" : '.*'"${dataset}" >/dev/null
+    then
+      # First day of the month. Periodic/Monthly runs today
+      if [ ${_daily_zfs_snapshots_monthday} -eq 1 ]
+      then
+        case "${daily_zfs_snapshots_create_monthly}" in
+            [Yy][Ee][Ss])
+          _daily_zfs_snapshots_create_monthly "${dataset}"
+          _daily_zfs_snapshots_done="yes"
+          ;;
+            *)
+          ;;
+        esac
+      fi
+
+      # Saturday. Periodic/Weekly runs today
+      if [ ${_daily_zfs_snapshots_weekday} -eq 6 ] &&
+         [ ${_daily_zfs_snapshots_done} = "no" ]
+      then
+        case "${daily_zfs_snapshots_create_weekly}" in
+            [Yy][Ee][Ss])
+          _daily_zfs_snapshots_create_weekly "${dataset}"
+          _daily_zfs_snapshots_done="yes"
+          ;;
+            *)
+          ;;
+        esac
+      fi
+      if [ ${_daily_zfs_snapshots_done} = "no" ]
+      then
+        _daily_zfs_snapshots_create_daily "${dataset}"
+        _daily_zfs_snapshots_done="yes"
+      fi
+      if [ "${_daily_zfs_snapshots_done}" = "yes" ]
+      then
+        echo "  done:   ${dataset}"
+      else
+        echo "  failed: ${dataset}"
+      fi
+    fi
+  done
+  ;;
+    *)
+  ;;
+esac
+exit $rc

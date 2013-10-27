@@ -1,0 +1,21 @@
+This is an example location for the RSA public key used in
+the backup encryption scheme. You can generate your keypair
+on your workstation like this.
+
+First the private key:
+
+  `openssl genrsa -des3 -out private.pem 4096`
+
+With this, we create the public.key:
+
+  `openssl rsa -pubout -in private.pem -out public.pem`
+
+And done.
+
+Now upload your public key to the server and update
+/etc/periodic.conf.local with the path and filename.
+Store your private key in a secure (both in terms of access
+as well as fault-tolerancy) location.
+
+That location should neither be where you store the backups
+nor the server you uploaded the public key to, obviously.
