@@ -18,28 +18,35 @@ Installation
 3. Add the following entries to your `/etc/periodic.conf.local`:
 
 * `daily_zfs_snapshots_enable="YES"`
+
   Enable or disable the snapshot creation
 
 * `daily_zfs_snapshots_create_weekly="YES"`
+
   Tag the snapshot on each saturday as weekly
 
 * `daily_zfs_snapshots_create_monthly="YES"`
+
   Tag the snapshot on the first of each month as monthly
 
 * `daily_zfs_snapshots_datasets_ignore="pool/backup"`
+
   Which dataset to not create snapshots for. This can be a comma
   separated list of datasets. Child datasets are ignored as well.
   So "pool/backup" also ignores "pool/backup/restore" and
   "pool/backup/test" for example.
 
 * `daily_zfs_snapshots_user_namespace="com.1and1.periodic"`
+
   The user namespace used for snapshot user properties. Change as you like,
   but needs to be set to a valid value. See `zfs(1)`.
 
 * `daily_zfs_snapshots_backup_enable="YES"`
+
   Enable or disable the creation of backups from the snapshots.
 
 * `daily_zfs_snapshots_backup_daily_style="differential"`
+
   This governs how backups from daily snapshots are created. Monthly
   snapshots always create a full stream. Weekly snapshots create an
   incremental stream against the last monthly, or full streams if no
@@ -51,26 +58,32 @@ Installation
   If no prior snapshot exists, a full stream is generated.
 
 * `daily_zfs_snapshots_backup_storage_dir="/backup"`
+
   Path where the backup streams are to be written to.
 
 * `daily_zfs_snapshots_backup_send_flags="-Dp"`
+
   Flags to pass to `zfs send.`
 
 * `daily_zfs_snapshots_cleanup_enable="YES"`
+
   Enable or disable the cleanup routines. Needs to be set to YES for
   the more specific routine's enable/disable to be evaluated.
 
 * `daily_zfs_snapshots_cleanup_viability="10"`
+
   How many days of snapshots and backups you want to keep. Defaults to
   10 days if unset.
 
 * `daily_zfs_snapshots_cleanup_clear_snapshots="YES"`
+
   Enable or disable the cleanup of snapshots. All snapshots older than
   specified in the viability option are destroyed. The newest monthly
   as well as the newest weekly snapshot are always kept, if they are
   created.
 
 * `daily_zfs_snapshots_cleanup_script_snapshots="/usr/local/sbin/zfs-snapshots-clean.pl"`
+
   The script that implements the snapshot cleanup. Adjust to the path
   you used. If you want to trigger your own script, it must implement
   a `-d $days` command line option that the number of days can be
@@ -114,9 +127,11 @@ You can configure this by setting the following two options in
 `periodic.conf.local`:
 
 * `daily_zfs_snapshots_cleanup_clear_storage="YES"`
+
   Enable or disable the storage cleanup script.
 
 * `daily_zfs_snapshots_cleanup_script_storage="/usr/local/sbin/zfs-snapshots-tidy.pl"`
+
   Absolute path to your storage cleanup script. This too needs to
   implement a `-d $days` command line option if you want to replace it
   with a script for your environment.
@@ -149,7 +164,7 @@ Configure the example processing script
    `tar`, `curl`, `par2`
 
 For the path where the encryption keys are generated, you can use a
-small tempfs.
+small `tmpfs`.
 
 Configure the example storage cleanup script
 ============================================
