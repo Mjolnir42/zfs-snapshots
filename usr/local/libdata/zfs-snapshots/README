@@ -1,12 +1,30 @@
 This is an example location for the RSA public key used in
-the backup encryption scheme. You can generate your keypair
-on your workstation like this.
+the backup encryption scheme.
+This is also an example keyfile. And actually not a key at
+all.
+
+You can generate your personal keypair on your workstation
+like this:
 
 First the private key:
 
-  `openssl genrsa -des3 -out private.pem 4096`
+  `openssl genrsa -aes256 -out private.pem 8192`
+or
+  `openssl genrsa -camellia256 -out private.pem 8192`
 
-With this, we create the public.key:
+Basically, adjust this to your personal preferred paranoia
+level.
+  `openssl genrsa -h'
+lists the encryption schemes supported by your version of
+openssl. Length should probably not be less than 4096 nowadays,
+and rarely more than somewhere in the 15360 to 16384 range.
+
+Adjust this to your threat model and how useful the data on the
+backups is for how long. The usual.
+
+Use a proper passphrase.
+
+With this done, we can create the public.key:
 
   `openssl rsa -pubout -in private.pem -out public.pem`
 
@@ -15,7 +33,11 @@ And done.
 Now upload your public key to the server and update
 /etc/periodic.conf.local with the path and filename.
 Store your private key in a secure (both in terms of access
-as well as fault-tolerancy) location.
+as well as fault-tolerance) location.
 
 That location should neither be where you store the backups
 nor the server you uploaded the public key to, obviously.
+
+If you need to restore a stream you can fetch the encrypted
+keyfile to your workstation, decrypt it and push it back onto
+the server via a secure channel (scp, sftp).
