@@ -152,7 +152,6 @@ foreach (@deletelist) {
   my @par2 = $ez->grep(Grep => qr/$file\..*/);
   foreach my $pf (@par2) {
     $ez->delete( RemoteFile => $pf );
-    say "- $pf";
   }
 }
 $ez->quit;
