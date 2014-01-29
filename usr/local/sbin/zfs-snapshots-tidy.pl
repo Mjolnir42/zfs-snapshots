@@ -89,8 +89,20 @@ foreach (@listing) {
 }
 
 # setup %$backups datastructure
+#
+# Datefield format: YYYYMMdd
+# Valid ranges: years:  0000-9999 (might be really old backups)
+#               months: 01-12
+#               days:   01-31
+my $re_date =
+  qr/[[:digit:]]{4}(?:0[1-9]|1[012])(?:0[1-9]|[12][[:digit:]]|3[01])/;
+my $re_file =
+  qr/^([[:alnum:]_-]+)_${re_date}-${re_date}_([A-Z]{4})\.tar$/;
+
 foreach (@newlist) {
-  $_ =~ m/^([[:alnum:]_]+)_([[:digit:]]{4,}[01][[:digit:]][012][[:digit:]])-([[:digit:]]{4,}[01][[:digit:]][012][[:digit:]])_([A-z]{4})\.tar$/;
+  $_ =~ m/${re_file}/
+        or next;  # do not delete files that do not match this
+                  # primitive filter
   $backups->{$1}->{$3}->{_file}      = $_;
   $backups->{$1}->{$3}->{_type}      = $4;
   $backups->{$1}->{$3}->{_from}      = $2;
@@ -102,6 +114,7 @@ foreach (@newlist) {
 }
 
 # keep the last backup (and its dependencies), regardless of age
+# XXX trippy variable naming
 my $keep_last = ($config->{always_keep_first} == TRUE) ? TRUE : FALSE;
 
 # identify backups that are still fresh

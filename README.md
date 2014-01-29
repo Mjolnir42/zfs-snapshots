@@ -139,10 +139,16 @@ You can configure this by setting the following two options in
 The example cleanup script:
 
 1. Retrieves a list of all files on the FTP
-2. Marks all backup files that were created in the current period of validity
-3. Marks all backup files that are referenced by a valid incremental
+2. Filter the list by first removing all par2 files, then all files that
+   do not match the regexp that all files created by zfs-snapshots
+   should match
+3. Marks all backup files that were created in the current period of validity.
+   The most recent backup is always marked valid - the script will never
+   delete your last backup (unless it has a bug).
+4. Marks all backup files that are referenced by a valid incremental
    backup
-4. Deletes all unmarked backups
+5. Delete all unmarked files on the list, as well as their par2 recovery
+   data.
 
 The FTP path must only contain files uploaded by the example processing
 script. In the best case scenario, all unrecognized files are only
