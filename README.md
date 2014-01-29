@@ -95,7 +95,7 @@ Enable backup processing
 zfs-snapshots can be configured to execute a processing script for every
 stream it generated. This script is passed the absolute path of the
 generated streamfile as first and only argument. You can enable this by
-setting the following option in periodic.conf.local to the absolute path
+setting the following option in `periodic.conf.local` to the absolute path
 of your processing script:
 
 ```
@@ -150,15 +150,18 @@ The example cleanup script:
 5. Delete all unmarked files on the list, as well as their par2 recovery
    data.
 
-The FTP path must only contain files uploaded by the example processing
-script. In the best case scenario, all unrecognized files are only
-deleted...
+Best case, the FTP path only contains files uploaded by the example
+processing script. It may contain more, but you need to make sure that
+those filenames do not match the filter regexp.
+Unless of course you want it to also be deleted according to the same
+rules. Then go ahead.
 
 Configure the example processing script
 =======================================
 
 1. Setup your `/root/.netrc` so it can be used by curl to FTP upload
-   the backups
+   the backups. Check the permissions on `/root` and the file itself.
+   Be sad that you are stuck with FTP.
 2. Specify your RSA public key in line 40 of the script. See the README
    in `usr/local/libdata/zfs-snapshots/` for information how to create a
    RSA keypair with `openssl`'s commandline tools.
@@ -170,7 +173,12 @@ Configure the example processing script
    `tar`, `curl`, `par2`
 
 For the path where the encryption keys are generated, you can use a
-small `tmpfs`.
+small `tmpfs`. Remember that ZFS is copy-on-write, so there is really no
+secure deletion by selectively overwriting stuff. Use the `late` option
+in `fstab` if you need to mount the `tmpfs` into a path created by zfs.
+
+Or read all the rc scripts to know when ftab is processed in relation to
+`zfs_enable=YES` automounts.
 
 Configure the example storage cleanup script
 ============================================
@@ -181,7 +189,10 @@ Configure the example storage cleanup script
    can check this by using:
    `perl -c /usr/local/sbin/zfs-snapshots-tidy.pl` 
 
-Additional information
+LICENSE
 ======================
 This software is released under a 2-clause BSD license.
+
+Additional information
+======================
 Use at your own risk. Slippery when wet.
