@@ -1,8 +1,8 @@
 #!/usr/bin/perl
 #
-# Copyright (c) 2013  1&1 Internet AG
-# Written by          Joerg Pernfuss <joerg.pernfuss@1und1.de>
+# Copyright (c) 2013-2014  1&1 Internet AG
 # All rights reserved.
+# Written by Joerg Pernfuss <joerg.pernfuss@1und1.de>
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
