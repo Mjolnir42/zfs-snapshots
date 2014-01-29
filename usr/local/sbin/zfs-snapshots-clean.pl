@@ -120,7 +120,7 @@ for my $pkey ( sort keys %$snapshots ) {
 say "Destroying old snapshots:";
 foreach (@$destroylist) {
   say "- $_";
-  system($zfs,"destroy","-nv",$_);
+  system($zfs,"destroy","-v",$_);
   my $ex = $? >> 8;
   # set $rc to the highest exit code we encounter
   $rc = ($ex == 0) ? $rc : ($ex > $rc) ? $ex : $rc;
